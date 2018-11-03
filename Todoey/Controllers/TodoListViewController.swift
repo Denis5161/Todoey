@@ -8,13 +8,15 @@
 
 import UIKit
 import RealmSwift
+import ChameleonFramework
 
-class TodoListViewController: UITableViewController {
+class TodoListViewController: SwipeTableViewController {
     
-    var todoItems: Results<Item>?
 //     An optional array of results that consists of item objects.
+    var todoItems: Results<Item>?
     
     let realm = try! Realm()
+    @IBOutlet weak var searchBar: UISearchBar!
     
     var selectedCategory : Category? {
         didSet{
@@ -25,7 +27,54 @@ class TodoListViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+
         }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        
+        title = selectedCategory?.name
+        
+        //      A guard let statement checks, like an optional binding method if a constant (navBar) has a value.
+        //      If it is nil it returns the function in the else statement.
+        //      But unlike an if let statement, we expect that the code works close to 99% of the time.
+        //      In that case, we can use the guard let statement.
+        guard let colorHex = selectedCategory?.color else {fatalError()}
+
+        
+        updateNavBar(withHexCode: colorHex)
+
+        
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+
+        updateNavBar(withHexCode: "1D9BF6")
+    }
+    
+    
+    //    MARK: - Nav Bar Setup Methods
+    
+    func updateNavBar(withHexCode colorHexCode: String) {
+        
+        guard let navBar = navigationController?.navigationBar else {fatalError("Navigation Controller does not exist")}
+        
+        guard let navBarColor = HexColor(colorHexCode) else {fatalError()}
+        navBar.barTintColor = navBarColor
+        
+        navBar.tintColor = ContrastColorOf(navBarColor, returnFlat: true)
+        
+        navBar.largeTitleTextAttributes = [NSAttributedString.Key.foregroundColor : ContrastColorOf(navBarColor, returnFlat: true)]
+        
+        searchBar.barTintColor = navBarColor
+        
+        //Remove Borders (Extra code outside of module)
+        navBar.backgroundImage(for: UIBarPosition.any, barMetrics: UIBarMetrics.default)
+        navBar.shadowImage = UIImage()
+        searchBar.isTranslucent = false
+        searchBar.backgroundImage = UIImage()
+
+        
+    }
 
     //    MARK: - Tableview Datasource Methods
     
@@ -39,11 +88,17 @@ class TodoListViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         
-        let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoItemCell", for: indexPath)
+        let cell = super.tableView(tableView, cellForRowAt: indexPath)
         
         if let item = todoItems?[indexPath.row] {
             
-                    cell.textLabel?.text = item.title
+            cell.textLabel?.text = item.title
+            
+            if let color = HexColor(selectedCategory!.color)?.darken(byPercentage: CGFloat(indexPath.row) / CGFloat(todoItems!.count)) {
+                cell.backgroundColor = color
+                cell.textLabel?.textColor = ContrastColorOf(color, returnFlat: true)
+            }
+            
             
             //                  A Ternary Operator.
             //                  value = condition ? valueIfTrue : valueIfFalse
@@ -136,6 +191,21 @@ class TodoListViewController: UITableViewController {
         
         tableView.reloadData()
     }
+    //     MARK: - Deleting Items
+    
+    override func updateModel(at indexPath: IndexPath) {
+        
+        if let item = self.todoItems?[indexPath.row] {
+            do {
+                try self.realm.write {
+                    self.realm.delete(item)
+                }
+            } catch {
+                print("Error deleting item \(error)")
+            }
+        }
+    }
+    
 }
 
 // MARK: - Search bar methods
